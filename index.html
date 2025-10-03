@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Completo</title>
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f0f2f5;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+h1,h2,h3{text-align:center;}
+.indicators-grid,.section-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;margin-bottom:40px;}
+.card{background:white;padding:20px;border-radius:15px;box-shadow:0 8px 16px rgba(0,0,0,0.08);text-align:center;display:flex;flex-direction:column;align-items:center;}
+.thermometer-wrapper{display:flex;flex-direction:column;align-items:center;margin-bottom:20px;}
+.thermometer{width:50px;height:220px;background-color:#e9ecef;border:4px solid #ced4da;border-radius:25px 25px 0 0;position:relative;display:flex;align-items:flex-end;}
+.thermometer-fill{width:100%;height:0%;border-radius:21px 21px 0 0;background-color:transparent;transition:height 0.5s ease,background-color 0.5s ease;}
+.thermometer-base{width:80px;height:80px;background-color:#e9ecef;border:4px solid #ced4da;border-radius:50%;margin-top:-25px;position:relative;z-index:5;display:flex;align-items:center;justify-content:center;}
+.thermometer-base-fill{width:100%;height:100%;border-radius:50%;background-color:transparent;transition:background-color 0.5s ease;}
+.global-card{grid-column:1/-1;background:#f8f9fa;border:1px solid #dee2e6;padding:25px;}
+.description{font-weight:bold;margin-bottom:15px;color:#555;}
+</style>
+</head>
+<body>
+<h1>DASHBOARD DE INDICADORES</h1>
+
+<div id="dashboard">Cargando...</div>
+
+<script>
+// NORMALIZACIÓN A ESCALA 0-10
+function normalizar(valor, tipo){
+    if(tipo === "porcentaje") return (valor / 100) * 10;
+    else return Math.min(10, valor / 10); // Ajusta divisor según tus valores
+}
+
+// RENDER DE TERMÓMETRO
+function renderThermometer(id, value){
+    const fill = document.getElementById(`fill-${id}`);
+    const base = document.getElementById(`base-${id}`);
+    if(!fill) return;
+    const porcentaje = Math.max(0, Math.min(10, value)) * 10;
+    fill.style.height = porcentaje + "%";
+    let color;
+    if(value >= 7) color = "green";
+    else if(value >= 4) color = "orange";
+    else color = "red";
+    fill.style.backgroundColor = color;
+    if(base) base.style.backgroundColor = color;
+}
+
+// GENERAR HTML PARA UNA SECCIÓN
+function generateIndicatorsHTML(sectionName, indicadores){
+    let html = `<h2>SECCIÓN: ${sectionName.replace(/^\w/, c => c.toUpperCase())}</h2><div class="section-grid">`;
+    indicadores.forEach(ind => {
+        const valueNorm = normalizar(ind.valor, ind.tipo);
+        html += `
+        <div class="card">
+            <h3>${ind.nombre}</h3>
+            <div class="thermometer-wrapper">
+                <div class="thermometer"><div class="thermometer-fill" id="fill-${sectionName}-${ind.nombre}"></div></div>
+                <div class="thermometer-base"><div class="thermometer-base-fill" id="base-${sectionName}-${ind.nombre}"></div></div>
+            </div>
+            <p>${valueNorm.toFixed(1)}/10</p>
+        </div>`;
+    });
+    html += `</div>`;
+    // Termómetro promedio de sección
+    html += `
+    <div class="card global-card">
+        <h2>PROMEDIO DE LA SECCIÓN</h2>
+        <p class="description" id="desc-${sectionName}-prom">0.0</p>
+        <div class="thermometer-wrapper">
+            <div class="thermometer"><div class="thermometer-fill" id="fill-${sectionName}-prom"></div></div>
+            <div class="thermometer-base"><div class="thermometer-base-fill" id="base-${sectionName}-prom"></div></div>
+        </div>
+    </div>
+    `;
+    return html;
+}
+
+// RENDER DE TODO EL DASHBOARD
+function renderDashboard(data){
+    const dashboard = document.getElementById("dashboard");
+    let html = "";
+    Object.keys(data).forEach(section => {
+        html += generateIndicatorsHTML(section, data[section]);
+    });
+    // Termómetro global
+    html += `
+    <div class="card global-card">
+        <h2>PROMEDIO GENERAL</h2>
+        <p class="description" id="desc-global">0.0</p>
+        <div class="thermometer-wrapper">
+            <div class="thermometer"><div class="thermometer-fill" id="fill-global"></div></div>
+            <div class="thermometer-base"><div class="thermometer-base-fill" id="base-global"></div></div>
+        </div>
+    </div>
+    `;
+    dashboard.innerHTML = html;
+
+    // Renderizar termómetros individuales
+    Object.keys(data).forEach(section => {
+        data[section].forEach(ind => {
+            const valueNorm = normalizar(ind.valor, ind.tipo);
+            renderThermometer(`${section}-${ind.nombre}`, valueNorm);
+        });
+    });
+
+    // Actualizar promedios
+    updateGlobalAverage(data);
+}
+
+// CALCULAR PROMEDIO DE SECCIÓN
+function updateSectionAverage(sectionName, indicadores){
+    const values = indicadores.map(ind => normalizar(ind.valor, ind.tipo));
+    const avg = values.reduce((a,b)=>a+b,0)/values.length;
+    renderThermometer(`${sectionName}-prom`, avg);
+    document.getElementById(`desc-${sectionName}-prom`).textContent = avg.toFixed(1);
+    return avg;
+}
+
+// CALCULAR PROMEDIO GLOBAL
+function updateGlobalAverage(data){
+    const sectionAverages = Object.keys(data).map(section => updateSectionAverage(section, data[section]));
+    const totalAvg = sectionAverages.reduce((a,b)=>a+b,0)/sectionAverages.length;
+    renderThermometer("global", totalAvg);
+    document.getElementById("desc-global").textContent = totalAvg.toFixed(1);
+}
+
+// FUNCION PRINCIPAL
+async function initDashboard(){
+    try {
+        const res = await fetch("/api/indicadores");
+        const data = await res.json();
+        renderDashboard(data);
+    } catch(err) {
+        console.error(err);
+        document.getElementById("dashboard").textContent = "Error cargando los datos.";
+    }
+}
+
+// INICIALIZAR
+initDashboard();
+</script>
+</body>
+</html>
