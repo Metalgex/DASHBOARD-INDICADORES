@@ -1,0 +1,9 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/dashboard-indicadores:$COMMIT_SHA', '.' ]
+images:
+- 'gcr.io/$PROJECT_ID/dashboard-indicadores:$COMMIT_SHA'
+
+options:
+  # Soluciona el error forzando el uso de Cloud Logging
+  logging: CLOUD_LOGGING_ONLY
