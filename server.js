@@ -6,6 +6,7 @@ const path = require("path");
 const app = express();
 app.use(cors());
 app.use(express.static(__dirname));
+app.use(express.json());
 
 // Conexión a tu base de datos en Cloud SQL
 const db = mysql.createPool({
@@ -24,22 +25,73 @@ db.getConnection((err, connection) => {
   connection.release();
 });
 
+app.post("/api/guardarIndicadores", (req, res) => {
+  const { mes, indicadores } = req.body;
+  if (!mes || !Array.isArray(indicadores)) {
+    return res.status(400).json({ error: "Payload inválido" });
+  }
+
+  const values = indicadores.map(ind => [ind.id, ind.valor, mes]);
+
+  const sql = `
+    INSERT INTO historial_indicadores (indicador_id, valor, mes) 
+    VALUES ? 
+    ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+  `;
+
+  db.query(sql, [values], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+app.get("/api/meses", (req, res) => {
+  db.query("SELECT DISTINCT mes FROM historial_indicadores ORDER BY mes DESC", (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows.map(r => ({ mes: r.mes.toISOString().slice(0,10) })));
+  });
+});
+
 // Endpoint API
 app.get("/api/indicadores", (req, res) => {
-  db.query("SELECT * FROM indicadores", (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+  const { mes } = req.query;
 
-    const result = {};
-    rows.forEach(row => {
-      if (!result[row.seccion]) result[row.seccion] = [];
-      result[row.seccion].push({
-        nombre: row.nombre,
-        valor: row.valor,
-        tipo: row.tipo
+  const getLatestSql = "SELECT MAX(mes) as mes FROM historial_indicadores";
+
+  const queryByMonth = (month) => {
+    const sql = `
+      SELECT i.seccion, i.nombre, i.tipo, h.valor
+      FROM indicadores i
+      LEFT JOIN historial_indicadores h 
+        ON h.indicador_id = i.id AND h.mes = ?
+      ORDER BY i.id
+    `;
+    db.query(sql, [month], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const result = {};
+      rows.forEach(r => {
+        if (!result[r.seccion]) result[r.seccion] = [];
+        result[r.seccion].push({
+          nombre: r.nombre,
+          valor: r.valor || 0,
+          tipo: r.tipo
+        });
       });
+      res.json(result);
     });
-    res.json(result);
-  });
+  };
+
+  if (mes) {
+    queryByMonth(mes);
+  } else {
+    db.query(getLatestSql, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const latest = rows[0].mes;
+      if (!latest) return res.json({});
+      queryByMonth(latest);
+    });
+  }
 });
 
 // Servir index.html
