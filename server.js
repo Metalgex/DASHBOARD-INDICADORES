@@ -5,15 +5,13 @@ const path = require("path");
 
 const app = express();
 app.use(cors());
-
-// Servir archivos estáticos desde la misma carpeta que server.js
 app.use(express.static(__dirname));
 
-// Conexión a la base de datos MySQL local
+// Conexión a tu base de datos en Cloud SQL
 const db = mysql.createPool({
-  host: "34.173.110.44",
+  socketPath: "/cloudsql/dashboard-474005:us-central1:indicadores", // <-- usa conexión por socket
   user: "root",
-  password: "Cvortex2006!",
+  password: "Cvortex2006!",   // ⚠️ cámbiala si usas otra
   database: "dashboard_indicadores"
 });
 
@@ -25,6 +23,7 @@ db.getConnection((err, connection) => {
   console.log("Conectado a la base de datos");
   connection.release();
 });
+
 // Endpoint API
 app.get("/api/indicadores", (req, res) => {
   db.query("SELECT * FROM indicadores", (err, rows) => {
@@ -43,13 +42,15 @@ app.get("/api/indicadores", (req, res) => {
   });
 });
 
-// Servir index.html en la raíz
+// Servir index.html
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html")); // apunta al index.html dentro de DASHBOARD
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Iniciar el servidor
-const PORT = 3000;
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Servidor corriendo en http://localhost:${PORT}`)
 );
+//para hacer commit extra
+//commit2
